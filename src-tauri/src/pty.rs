@@ -23,15 +23,37 @@ pub struct PtyState {
     next: Mutex<u32>,
 }
 
-fn default_shell() -> String {
+fn default_shell() -> (String, Vec<String>) {
     #[cfg(windows)]
     {
-        std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".to_string())
+        // Prefer PowerShell 7 (pwsh) if present, else Windows PowerShell,
+        // and fall back to cmd only when neither can be found.
+        if let Ok(pwsh) = which("pwsh") {
+            return (pwsh, vec!["-NoLogo".into()]);
+        }
+        if let Ok(ps) = which("powershell") {
+            return (ps, vec!["-NoLogo".into()]);
+        }
+        let comspec = std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".to_string());
+        (comspec, vec![])
     }
     #[cfg(not(windows))]
     {
-        std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string())
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+        (shell, vec![])
     }
+}
+
+#[cfg(windows)]
+fn which(exe: &str) -> Result<String, ()> {
+    let path = std::env::var_os("PATH").ok_or(())?;
+    for dir in std::env::split_paths(&path) {
+        let candidate = dir.join(format!("{exe}.exe"));
+        if candidate.is_file() {
+            return Ok(candidate.to_string_lossy().to_string());
+        }
+    }
+    Err(())
 }
 
 #[tauri::command]
@@ -52,7 +74,11 @@ pub fn pty_open(
         })
         .map_err(|e| format!("openpty: {e}"))?;
 
-    let mut cmd = CommandBuilder::new(default_shell());
+    let (shell, args) = default_shell();
+    let mut cmd = CommandBuilder::new(shell);
+    for arg in args {
+        cmd.arg(arg);
+    }
     if let Some(dir) = cwd {
         cmd.cwd(dir);
     }

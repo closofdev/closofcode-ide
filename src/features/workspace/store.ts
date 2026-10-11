@@ -17,6 +17,7 @@ export interface OpenTab {
   content: string
   savedContent: string
   language: string
+  view?: { cursorLine: number; cursorColumn: number; scrollTop: number }
 }
 
 interface WorkspaceState {
@@ -27,6 +28,7 @@ interface WorkspaceState {
   selected: string | null
   tabs: OpenTab[]
   activeTab: string | null
+  gitChanges: Record<string, "added" | "modified" | "deleted" | "untracked" | "renamed">
 }
 
 const langFromPath = (path: string): string => {
@@ -59,6 +61,7 @@ interface WorkspaceDeps {
   createDir?: (path: string) => Promise<void>
   renamePath?: (from: string, to: string) => Promise<void>
   deletePath?: (path: string) => Promise<void>
+  gitStatus?: (root: string) => Promise<{ files: Record<string, string> }>
 }
 
 export function createWorkspaceStore(deps: WorkspaceDeps) {
@@ -70,6 +73,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     selected: null,
     tabs: [],
     activeTab: null,
+    gitChanges: {},
   })
 
   const rootChildren = () => (state.root ? state.children[state.root] ?? [] : [])
@@ -102,7 +106,9 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     setState("children", {})
     setState("expanded", {})
     setState("selected", null)
+    setState("gitChanges", {})
     await loadDir(path)
+    await loadGitStatus()
   }
 
   async function toggleDir(path: string) {
@@ -162,6 +168,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     for (const dir of expanded) {
       if (state.nodes[dir]) await loadDir(dir)
     }
+    await loadGitStatus()
   }
 
   async function reloadFile(path: string) {
@@ -178,6 +185,24 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
 
   function setActiveTab(path: string | null) {
     setState("activeTab", path)
+  }
+
+  async function loadGitStatus() {
+    if (!state.root || !deps.gitStatus) return
+    const result = await deps.gitStatus(state.root).catch(() => null)
+    setState("gitChanges", (result?.files as any) ?? {})
+  }
+
+  function gitChange(path: string): "added" | "modified" | "deleted" | "untracked" | "renamed" | undefined {
+    return state.gitChanges[path]
+  }
+
+  function setView(path: string, view: { cursorLine: number; cursorColumn: number; scrollTop: number }) {
+    setState("tabs", (t) => t.path === path, "view", view)
+  }
+
+  function getView(path: string) {
+    return state.tabs.find((t) => t.path === path)?.view
   }
 
   async function newFile(dirPath: string, name: string) {
@@ -230,6 +255,10 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     newFile,
     newFolder,
     remove,
+    loadGitStatus,
+    gitChange,
+    setView,
+    getView,
   }
 }
 

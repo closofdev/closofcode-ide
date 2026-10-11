@@ -1,4 +1,5 @@
 mod fs_ops;
+mod git;
 mod pty;
 mod watch;
 
@@ -17,6 +18,7 @@ pub fn run() {
             fs_ops::rename_path,
             fs_ops::delete_path,
             watch::watch_root,
+            git::git_status,
             pty::pty_open,
             pty::pty_write,
             pty::pty_resize,

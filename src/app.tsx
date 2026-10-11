@@ -1,53 +1,15 @@
-import { createEffect, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js"
 import { useTheme } from "~ui/theme/context"
 import { Icon } from "~ui/components/icon"
 import { Shell } from "./features/layout/shell"
 import { FileTree } from "./features/file-tree/file-tree"
 import { CodeEditor } from "./features/editor/code-editor"
+import { TabBar } from "./features/tabs/tab-bar"
 import { TerminalPanel } from "./features/terminal/terminal-panel"
 import { CommandPalette } from "./features/palette/command-palette"
 import { CommandRegistryProvider, useCommandRegistry } from "./features/palette/registry"
 import { WorkspaceProvider, useWorkspace } from "./features/workspace/context"
 import { isTauri, pickFolder, watchRoot, onFsChange } from "./lib/tauri"
-
-function TabBar() {
-  const ws = useWorkspace()
-  return (
-    <>
-      <Show when={ws.state.tabs.length === 0}>
-        <span class="px-3 text-sm text-text-faint">No open files</span>
-      </Show>
-      <For each={ws.state.tabs}>
-        {(tab) => (
-          <div
-            data-slot="editor-tab"
-            class="h-full px-3 flex items-center gap-2 border-r border-border-base text-sm cursor-pointer shrink-0"
-            classList={{
-              "bg-background-base text-text-base": ws.state.activeTab === tab.path,
-              "bg-background-strong text-text-muted": ws.state.activeTab !== tab.path,
-            }}
-            onClick={() => ws.setActiveTab(tab.path)}
-          >
-            <span class="truncate max-w-[160px]">{tab.name}</span>
-            <Show when={ws.isDirty(tab.path)}>
-              <span class="size-1.5 rounded-full bg-primary shrink-0" />
-            </Show>
-            <button
-              type="button"
-              class="hover:text-text-base"
-              onClick={(e) => {
-                e.stopPropagation()
-                ws.closeTab(tab.path)
-              }}
-            >
-              <Icon name="circle-x" size="small" />
-            </button>
-          </div>
-        )}
-      </For>
-    </>
-  )
-}
 
 function Editor() {
   const ws = useWorkspace()
@@ -65,11 +27,14 @@ function Editor() {
       >
         {(tab) => (
           <CodeEditor
+            path={tab().path}
             value={tab().content}
             language={tab().language}
             theme={theme.mode()}
+            initialView={ws.getView(tab().path)}
             onChange={(v) => ws.updateContent(tab().path, v)}
             onSave={() => void ws.saveFile(tab().path)}
+            onViewChange={(view) => ws.setView(tab().path, view)}
           />
         )}
       </Show>
@@ -121,10 +86,19 @@ function Workspace() {
 
   onMount(() => {
     if (isTauri) {
+      let gitTimer: number | undefined
+      const scheduleGitRefresh = () => {
+        if (gitTimer !== undefined) clearTimeout(gitTimer)
+        gitTimer = window.setTimeout(() => void ws.loadGitStatus(), 400)
+      }
       void onFsChange((change) => {
         const parts = change.path.split(/[\\/]/)
         parts.pop()
         void ws.refreshDir(parts.join("\\"))
+        scheduleGitRefresh()
+      })
+      onCleanup(() => {
+        if (gitTimer !== undefined) clearTimeout(gitTimer)
       })
     }
 

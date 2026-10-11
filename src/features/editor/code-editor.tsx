@@ -1,13 +1,25 @@
 import * as monaco from "monaco-editor"
 import { createEffect, onCleanup, onMount } from "solid-js"
 
+export interface EditorViewState {
+  cursorLine: number
+  cursorColumn: number
+  scrollTop: number
+}
+
 export interface EditorProps {
+  path: string
   value: string
   language: string
   theme?: "dark" | "light"
   onChange?: (value: string) => void
   onSave?: () => void
+  onViewChange?: (view: EditorViewState) => void
+  initialView?: EditorViewState
 }
+
+const FONT_SIZE_MIN = 8
+const FONT_SIZE_MAX = 40
 
 function defineThemes() {
   monaco.editor.defineTheme("opencode-dark", {
@@ -37,6 +49,12 @@ function defineThemes() {
   })
 }
 
+let fontSize = 14
+
+/** Persisted per-editor view state, keyed by file path, so switching tabs
+ *  restores cursor and scroll position instead of jumping to the top. */
+const viewStore = new Map<string, EditorViewState>()
+
 export function CodeEditor(props: EditorProps) {
   let host: HTMLDivElement | undefined
   let editor: monaco.editor.IStandaloneCodeEditor | undefined
@@ -52,7 +70,7 @@ export function CodeEditor(props: EditorProps) {
       theme: props.theme === "light" ? "vs" : "opencode-dark",
       automaticLayout: true,
       minimap: { enabled: false },
-      fontSize: 14,
+      fontSize,
       fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
       scrollBeyondLastLine: false,
       renderLineHighlight: "all",
@@ -60,17 +78,53 @@ export function CodeEditor(props: EditorProps) {
       padding: { top: 12 },
       smoothScrolling: true,
       cursorBlinking: "smooth",
+      find: { autoFindInSelection: "never" },
     })
+
+    applyView(props.initialView ?? viewStore.get(props.path))
 
     editor.onDidChangeModelContent(() => {
       if (applyingExternal) return
       props.onChange?.(editor!.getValue())
     })
 
+    editor.onDidChangeCursorPosition(() => saveView())
+    editor.onDidScrollChange((e) => {
+      if (e.scrollTopChanged) saveView()
+    })
+
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       props.onSave?.()
     })
+
+    // Ctrl+F: open Monaco's built-in find widget.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
+      editor!.getAction?.("actions.find")?.run()
+    })
   })
+
+  function saveView() {
+    if (!editor) return
+    const pos = editor.getPosition()
+    const view: EditorViewState = {
+      cursorLine: pos?.lineNumber ?? 1,
+      cursorColumn: pos?.column ?? 1,
+      scrollTop: editor.getScrollTop(),
+    }
+    viewStore.set(props.path, view)
+    props.onViewChange?.(view)
+  }
+
+  function applyView(view?: EditorViewState) {
+    if (!editor) return
+    if (view) {
+      editor.setPosition({ lineNumber: view.cursorLine, column: view.cursorColumn })
+      editor.setScrollTop(view.scrollTop)
+    } else {
+      editor.setPosition({ lineNumber: 1, column: 1 })
+      editor.setScrollTop(0)
+    }
+  }
 
   onCleanup(() => editor?.dispose())
 
@@ -80,9 +134,7 @@ export function CodeEditor(props: EditorProps) {
     if (!editor) return
     if (editor.getValue() === value) return
     applyingExternal = true
-    const pos = editor.getPosition()
     editor.setValue(value)
-    if (pos) editor.setPosition(pos)
     applyingExternal = false
   })
 
@@ -95,5 +147,12 @@ export function CodeEditor(props: EditorProps) {
     monaco.editor.setTheme(props.theme === "light" ? "vs" : "opencode-dark")
   })
 
-  return <div ref={host} class="h-full w-full" />
+  const onWheelZoom = (e: WheelEvent) => {
+    if (!(e.ctrlKey || e.metaKey)) return
+    e.preventDefault()
+    fontSize = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, fontSize + (e.deltaY < 0 ? 1 : -1)))
+    editor?.updateOptions({ fontSize })
+  }
+
+  return <div ref={host} class="h-full w-full" onWheel={onWheelZoom} />
 }

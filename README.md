@@ -21,10 +21,13 @@ opposite: a normal editor that happens to look like opencode.
 ## Features
 
 - File explorer: open a folder, lazy-loaded tree, file-type icons, right-click
-  to create or delete files and folders
+  to create or delete files and folders, git status markers (M/A/D/U)
 - Editor: open and save files, multiple tabs, unsaved-change indicator, syntax
-  highlighting for the languages Monaco ships
-- Integrated terminal
+  highlighting for the languages Monaco ships, find (`Ctrl+F`), per-file cursor
+  and scroll restore
+- Tab strip: horizontal scroll, a clear active indicator, middle-click to close,
+  and a dropdown listing every open tab
+- Integrated terminal (PowerShell on Windows)
 - Command palette: `Ctrl+P` to search files, `Ctrl+Shift+P` for commands
 - Theme picker with the opencode theme set
 
@@ -35,8 +38,13 @@ opposite: a normal editor that happens to look like opencode.
 | `Ctrl+P` | Search files |
 | `Ctrl+Shift+P` | Command palette |
 | `Ctrl+S` | Save file |
+| `Ctrl+F` | Find in file |
 | `` Ctrl+` `` | Toggle terminal |
+| `Ctrl+Tab` | Next tab |
+| `Ctrl+Shift+Tab` | Previous tab |
+| `Ctrl+wheel` | Zoom editor |
 | `Enter` / `Space` | Open a focused tree item |
+| Middle click | Close a tab |
 
 ## Project layout
 
@@ -46,6 +54,7 @@ src/                     SolidJS app
     layout/              3-panel shell
     file-tree/           file explorer
     editor/              Monaco wrapper and theme
+    tabs/                tab strip
     terminal/            xterm and pty bridge
     palette/             command palette and registry
     workspace/           workspace state
@@ -53,6 +62,7 @@ src/                     SolidJS app
 vendor/ui/               vendored opencode design system
 src-tauri/               Rust shell
   src/fs_ops.rs          file read/write/create/delete
+  src/git.rs             git status for the tree
   src/watch.rs           filesystem watcher
   src/pty.rs             terminal pty
 ```

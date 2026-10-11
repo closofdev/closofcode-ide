@@ -35,6 +35,12 @@ export const watchRoot = (path: string) => invoke<void>("watch_root", { path })
 export const onFsChange = (cb: (change: FsChange) => void): Promise<UnlistenFn> =>
   listen<FsChange>("fs-change", (e) => cb(e.payload))
 
+// ---- git ----
+export interface GitStatusResult {
+  files: Record<string, string>
+}
+export const gitStatus = (root: string) => invoke<GitStatusResult>("git_status", { root })
+
 // ---- terminal ----
 export const ptyOpen = (cwd: string | null, cols: number, rows: number) =>
   invoke<number>("pty_open", { cwd, cols, rows })

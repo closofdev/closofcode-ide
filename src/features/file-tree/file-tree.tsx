@@ -9,6 +9,22 @@ function dirOf(p: string) {
   return parts.join(p.includes("\\") ? "\\" : "/")
 }
 
+const GIT_COLORS: Record<string, string> = {
+  added: "var(--v2-text-text-success, #4ade80)",
+  untracked: "var(--v2-text-text-success, #4ade80)",
+  modified: "var(--v2-text-text-warning, #e2b340)",
+  renamed: "var(--v2-text-text-warning, #e2b340)",
+  deleted: "var(--v2-text-text-critical, #f87171)",
+}
+
+const GIT_LETTERS: Record<string, string> = {
+  added: "A",
+  untracked: "U",
+  modified: "M",
+  renamed: "R",
+  deleted: "D",
+}
+
 function Row(props: { path: string; depth: number }) {
   const ws = useWorkspace()
   const [menu, setMenu] = createSignal(false)
@@ -16,6 +32,15 @@ function Row(props: { path: string; depth: number }) {
   const isDir = () => node().type === "directory"
   const isOpen = () => ws.isExpanded(props.path)
   const isSelected = () => ws.state.selected === props.path
+  const change = () => ws.gitChange(props.path)
+
+  // For directories, show a coloured dot when anything beneath them changed.
+  const dirDirty = () => {
+    if (!isDir()) return false
+    const prefix = props.path.endsWith("\\") || props.path.endsWith("/") ? props.path : props.path + "\\"
+    const prefixFwd = props.path + "/"
+    return Object.keys(ws.state.gitChanges).some((p) => p.startsWith(prefix) || p.startsWith(prefixFwd))
+  }
 
   const activate = () => {
     if (isDir()) {
@@ -55,6 +80,7 @@ function Row(props: { path: string; depth: number }) {
         class="relative flex items-center gap-1.5 h-7 pr-2 rounded-md cursor-pointer text-text-muted hover:bg-[var(--v2-overlay-simple-overlay-hover)] hover:text-text-base"
         classList={{ "bg-[var(--v2-overlay-simple-overlay-pressed)] text-text-base": isSelected() }}
         style={{ "padding-left": `${8 + props.depth * 12}px` }}
+        title={props.path}
         onClick={activate}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -76,7 +102,20 @@ function Row(props: { path: string; depth: number }) {
             <Icon name={isOpen() ? "chevron-down" : "chevron-right"} size="small" />
           </span>
         </Show>
-        <span class="truncate text-sm">{node().name}</span>
+        <span class="truncate text-sm" classList={{ "text-text-base": !!change() || dirDirty() }}>
+          {node().name}
+        </span>
+
+        {/* git status: letter for files, dot for changed directories */}
+        <Show when={!isDir() && change()}>
+          <span class="ml-auto text-xs font-medium shrink-0" style={{ color: GIT_COLORS[change()!] }}>
+            {GIT_LETTERS[change()!]}
+          </span>
+        </Show>
+        <Show when={isDir() && dirDirty()}>
+          <span class="ml-auto size-1.5 rounded-full shrink-0" style={{ "background-color": GIT_COLORS.modified }} />
+        </Show>
+
         <Show when={menu()}>
           <div class="fixed inset-0 z-40" onClick={() => setMenu(false)} onContextMenu={(e) => e.preventDefault()} />
           <div class="absolute z-50 top-full left-4 mt-0.5 min-w-[160px] bg-background-strong border border-border-base rounded-md shadow-lg py-1 text-sm">

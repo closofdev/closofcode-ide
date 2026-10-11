@@ -4,6 +4,7 @@ import {
   createDir,
   createFile,
   deletePath,
+  gitStatus,
   isTauri,
   readDir,
   readFile,
@@ -31,6 +32,10 @@ export const { provider: WorkspaceProvider, use: useWorkspace } = createSimpleCo
       },
       deletePath: async (path) => {
         if (isTauri) await deletePath(path)
+      },
+      gitStatus: async (root) => {
+        if (!isTauri) return { files: {} }
+        return gitStatus(root)
       },
     }),
 })
