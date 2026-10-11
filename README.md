@@ -119,4 +119,4 @@ The installer is written to `src-tauri/target/release/bundle/`.
 
 ## License
 
-MIT. Theme and UI components derived from opencode (MIT).
+MIT. Theme and UI components derived from opencode (MIT)..
