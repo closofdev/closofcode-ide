@@ -106,6 +106,30 @@ function Editor(props: { onCursor: (c: { line: number; column: number }) => void
   )
 }
 
+/** A proper refresh (circular arrow) icon, since the vendored icon set has no
+ *  dedicated refresh glyph. */
+function RefreshIcon(props: { size?: number }) {
+  const s = () => props.size ?? 16
+  return (
+    <svg
+      width={s()}
+      height={s()}
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      style={{ "flex-shrink": 0 }}
+    >
+      <path
+        d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9"
+        stroke="currentColor"
+        stroke-width="1.4"
+        stroke-linecap="round"
+      />
+      <path d="M13.6 2.6v3.1h-3.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  )
+}
+
 function SidebarHeader() {
   const ws = useWorkspace()
   const openFolder = async () => {
@@ -116,22 +140,36 @@ function SidebarHeader() {
     persist({ root: picked, expanded: [], tabs: [], activeTab: null })
     await watchRoot(picked).catch(() => undefined)
   }
+  const newFile = async () => {
+    if (!ws.state.root) return
+    const name = window.prompt("New file name")
+    if (name) await ws.newFile(ws.state.root, name)
+  }
+  const newFolder = async () => {
+    if (!ws.state.root) return
+    const name = window.prompt("New folder name")
+    if (name) await ws.newFolder(ws.state.root, name)
+  }
   return (
     <div class="flex items-center justify-between w-full gap-1">
       <span class="text-sm font-medium truncate">{ws.state.root?.split(/[\\/]/).pop() ?? "Explorer"}</span>
-      <div class="flex items-center gap-1 shrink-0">
+      <div class="flex items-center gap-1.5 shrink-0">
         <Show when={ws.state.root}>
           <button
             type="button"
             class="text-text-faint hover:text-text-base"
-            title="New file (Ctrl+Shift+N)"
-            onClick={async () => {
-              if (!ws.state.root) return
-              const name = window.prompt("New file name")
-              if (name) await ws.newFile(ws.state.root, name)
-            }}
+            title="New file"
+            onClick={newFile}
           >
             <Icon name="plus-small" size="small" />
+          </button>
+          <button
+            type="button"
+            class="text-text-faint hover:text-text-base"
+            title="New folder"
+            onClick={newFolder}
+          >
+            <Icon name="folder-add-left" size="small" />
           </button>
           <button
             type="button"
@@ -139,7 +177,7 @@ function SidebarHeader() {
             title="Refresh"
             onClick={() => void ws.refreshAll()}
           >
-            <Icon name="reset" size="small" />
+            <RefreshIcon />
           </button>
         </Show>
         <button type="button" class="text-text-faint hover:text-text-base" title="Open folder" onClick={openFolder}>
@@ -208,6 +246,24 @@ function Workspace() {
     commands.register({ id: "view.toggleTerminal", title: "View: Toggle Terminal", run: () => setBottomOpen(!bottomOpen()) })
     commands.register({ id: "view.toggleSidebar", title: "View: Toggle Sidebar", run: () => setSidebarOpen(!sidebarOpen()) })
     commands.register({ id: "workspace.refresh", title: "Workspace: Refresh Explorer", run: () => void ws.refreshAll() })
+    commands.register({
+      id: "file.new",
+      title: "File: New File",
+      run: () => {
+        if (!ws.state.root) return
+        const name = window.prompt("New file name")
+        if (name) void ws.newFile(ws.state.root, name)
+      },
+    })
+    commands.register({
+      id: "file.newFolder",
+      title: "File: New Folder",
+      run: () => {
+        if (!ws.state.root) return
+        const name = window.prompt("New folder name")
+        if (name) void ws.newFolder(ws.state.root, name)
+      },
+    })
     commands.register({ id: "preferences.toggleAutoSave", title: "Preferences: Toggle Auto Save", run: () => setAutoSave(!autoSave()) })
   })
 
