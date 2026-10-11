@@ -1,0 +1,7 @@
+@import "~ui/styles/tailwind/index.css";
+
+/* Tailwind v4: tell the scanner where OUR code lives.
+   The vendored index.css ships a relative @source() pointing at opencode's
+   own layout, which resolves to the wrong folder here. */
+@source "../src";
+@source "../vendor/ui/src";
