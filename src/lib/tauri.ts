@@ -39,6 +39,7 @@ export const onFsChange = (cb: (change: FsChange) => void): Promise<UnlistenFn> 
 // ---- git ----
 export interface GitStatusResult {
   files: Record<string, string>
+  is_repo: boolean
 }
 export const gitStatus = (root: string) => invoke<GitStatusResult>("git_status", { root })
 

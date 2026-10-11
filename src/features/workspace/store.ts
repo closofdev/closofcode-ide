@@ -35,6 +35,7 @@ interface WorkspaceState {
   tabs: OpenTab[]
   activeTab: string | null
   gitChanges: Record<string, "added" | "modified" | "deleted" | "untracked" | "renamed">
+  gitRepo: boolean
   externalChanges: ExternalChange[]
 }
 
@@ -68,7 +69,7 @@ interface WorkspaceDeps {
   createDir?: (path: string) => Promise<void>
   renamePath?: (from: string, to: string) => Promise<void>
   deletePath?: (path: string) => Promise<void>
-  gitStatus?: (root: string) => Promise<{ files: Record<string, string> }>
+  gitStatus?: (root: string) => Promise<{ files: Record<string, string>; is_repo: boolean }>
 }
 
 export function createWorkspaceStore(deps: WorkspaceDeps) {
@@ -81,6 +82,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     tabs: [],
     activeTab: null,
     gitChanges: {},
+    gitRepo: false,
     externalChanges: [],
   })
 
@@ -115,8 +117,9 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     setState("expanded", {})
     setState("selected", null)
     setState("gitChanges", {})
+    setState("gitRepo", false)
     await loadDir(path)
-    await loadGitStatus()
+    await loadGitStatus(true)
   }
 
   async function toggleDir(path: string) {
@@ -144,9 +147,15 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     setState("tabs", (t) => t.path === path, "content", content)
   }
 
+  /** Paths this process just wrote, so the watcher can ignore the echo and we
+   *  avoid re-reading a file we already have in memory. */
+  const selfWrites = new Set<string>()
+
   async function saveFile(path: string) {
     const tab = state.tabs.find((t) => t.path === path)
     if (!tab) return
+    selfWrites.add(path)
+    window.setTimeout(() => selfWrites.delete(path), 1500)
     await deps.writeFile(path, tab.content)
     setState("tabs", (t) => t.path === path, "savedContent", tab.content)
   }
@@ -195,10 +204,23 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     setState("activeTab", path)
   }
 
-  async function loadGitStatus() {
+  let gitInFlight = false
+
+  async function loadGitStatus(force = false) {
     if (!state.root || !deps.gitStatus) return
-    const result = await deps.gitStatus(state.root).catch(() => null)
-    setState("gitChanges", (result?.files as any) ?? {})
+    // Skip entirely once we know the folder is not a git repo, unless the
+    // folder just changed and we are re-checking.
+    if (!state.gitRepo && !force) return
+    if (gitInFlight) return
+    gitInFlight = true
+    try {
+      const result = await deps.gitStatus(state.root).catch(() => null)
+      if (!result) return
+      setState("gitRepo", result.is_repo)
+      setState("gitChanges", (result.files as any) ?? {})
+    } finally {
+      gitInFlight = false
+    }
   }
 
   function gitChange(path: string): "added" | "modified" | "deleted" | "untracked" | "renamed" | undefined {
@@ -281,6 +303,8 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
   /** Called when a watched path changed on disk. If an open, dirty tab's file
    *  changed, record it so the UI can offer to reload. */
   async function noteFsChange(path: string) {
+    // Ignore the echo of our own save; we already have the current content.
+    if (selfWrites.has(path)) return
     const tab = state.tabs.find((t) => t.path === path)
     if (!tab) return
     const onDisk = await deps.readFile(path).catch(() => null)
@@ -336,8 +360,9 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     setState("nodes", {})
     setState("children", {})
     setState("gitChanges", {})
+    setState("gitRepo", false)
     await loadDir(path)
-    await loadGitStatus()
+    await loadGitStatus(true)
   }
 
   return {

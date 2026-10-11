@@ -34,7 +34,7 @@ export const { provider: WorkspaceProvider, use: useWorkspace } = createSimpleCo
         if (isTauri) await deletePath(path)
       },
       gitStatus: async (root) => {
-        if (!isTauri) return { files: {} }
+        if (!isTauri) return { files: {}, is_repo: false }
         return gitStatus(root)
       },
     }),

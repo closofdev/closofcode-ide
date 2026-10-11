@@ -185,8 +185,10 @@ function Workspace() {
     if (isTauri) {
       let gitTimer: number | undefined
       const scheduleGitRefresh = () => {
+        // Only git-status when the folder is actually a repo.
+        if (!ws.state.gitRepo) return
         if (gitTimer !== undefined) clearTimeout(gitTimer)
-        gitTimer = window.setTimeout(() => void ws.loadGitStatus(), 400)
+        gitTimer = window.setTimeout(() => void ws.loadGitStatus(), 600)
       }
       void onFsChange((change) => {
         const parts = change.path.split(/[\\/]/)
