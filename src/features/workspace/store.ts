@@ -20,6 +20,12 @@ export interface OpenTab {
   view?: { cursorLine: number; cursorColumn: number; scrollTop: number }
 }
 
+/** A file that changed on disk while it was open and dirty. */
+export interface ExternalChange {
+  path: string
+  name: string
+}
+
 interface WorkspaceState {
   root: string | null
   nodes: Record<string, FileNode>
@@ -29,6 +35,7 @@ interface WorkspaceState {
   tabs: OpenTab[]
   activeTab: string | null
   gitChanges: Record<string, "added" | "modified" | "deleted" | "untracked" | "renamed">
+  externalChanges: ExternalChange[]
 }
 
 const langFromPath = (path: string): string => {
@@ -74,6 +81,7 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     tabs: [],
     activeTab: null,
     gitChanges: {},
+    externalChanges: [],
   })
 
   const rootChildren = () => (state.root ? state.children[state.root] ?? [] : [])
@@ -233,6 +241,105 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     return p.includes("\\") ? "\\" : "/"
   }
 
+  /** Expand all ancestor folders of a path so it becomes visible in the tree. */
+  async function revealPath(path: string) {
+    const root = state.root
+    if (!root) return
+    const s = sep(root)
+    const rootParts = root.split(/[\\/]/).filter(Boolean)
+    const parts = path.split(/[\\/]/).filter(Boolean)
+    let acc = root.replace(/[\\/]$/, "")
+    for (let i = rootParts.length; i < parts.length - 1; i++) {
+      acc = `${acc}${s}${parts[i]}`
+      if (!state.expanded[acc]) {
+        setState("expanded", acc, true)
+        if (!state.children[acc]) await loadDir(acc)
+      }
+    }
+    setState("selected", path)
+  }
+
+  async function rename(path: string, newName: string) {
+    if (!deps.renamePath || !newName.trim()) return
+    const s = sep(path)
+    const parts = path.split(/[\\/]/)
+    parts.pop()
+    const parent = parts.join(s)
+    const to = `${parent}${s}${newName.trim()}`
+    if (to === path) return
+    await deps.renamePath(path, to)
+    // retarget any open tab
+    const idx = state.tabs.findIndex((t) => t.path === path)
+    if (idx >= 0) {
+      const name = newName.trim()
+      setState("tabs", idx, { path: to, name, language: langFromPath(to) })
+      if (state.activeTab === path) setState("activeTab", to)
+    }
+    await loadDir(parent)
+  }
+
+  /** Called when a watched path changed on disk. If an open, dirty tab's file
+   *  changed, record it so the UI can offer to reload. */
+  async function noteFsChange(path: string) {
+    const tab = state.tabs.find((t) => t.path === path)
+    if (!tab) return
+    const onDisk = await deps.readFile(path).catch(() => null)
+    if (onDisk === null) return
+    // Nothing to warn about if the disk content already matches what we saved.
+    if (onDisk === tab.savedContent) {
+      setState("externalChanges", (list) => list.filter((e) => e.path !== path))
+      return
+    }
+    const dirty = tab.content !== tab.savedContent
+    if (dirty) {
+      if (!state.externalChanges.some((e) => e.path === path)) {
+        setState("externalChanges", (list) => [...list, { path, name: tab.name }])
+      }
+    } else {
+      // Not dirty: adopt the new content silently.
+      setState("tabs", (t) => t.path === path, "content", onDisk)
+      setState("tabs", (t) => t.path === path, "savedContent", onDisk)
+      setState("externalChanges", (list) => list.filter((e) => e.path !== path))
+    }
+  }
+
+  function dismissExternal(path: string) {
+    setState("externalChanges", (list) => list.filter((e) => e.path !== path))
+  }
+
+  async function acceptExternal(path: string) {
+    await reloadFile(path)
+    dismissExternal(path)
+  }
+
+  function keepMine(path: string) {
+    // Treat the in-memory content as the source of truth going forward.
+    const tab = state.tabs.find((t) => t.path === path)
+    if (tab) setState("tabs", (t) => t.path === path, "savedContent", tab.content)
+    dismissExternal(path)
+  }
+
+  /** Persist-relevant snapshot: which folders are expanded. */
+  function expandedPaths(): string[] {
+    return Object.keys(state.expanded).filter((p) => state.expanded[p])
+  }
+
+  function setExpanded(paths: string[]) {
+    const next: Record<string, boolean> = {}
+    for (const p of paths) next[p] = true
+    setState("expanded", next)
+  }
+
+  /** Re-open a folder without resetting the root guard (used on startup). */
+  async function restoreFolder(path: string) {
+    setState("root", path)
+    setState("nodes", {})
+    setState("children", {})
+    setState("gitChanges", {})
+    await loadDir(path)
+    await loadGitStatus()
+  }
+
   return {
     state,
     rootChildren,
@@ -259,6 +366,15 @@ export function createWorkspaceStore(deps: WorkspaceDeps) {
     gitChange,
     setView,
     getView,
+    revealPath,
+    rename,
+    noteFsChange,
+    dismissExternal,
+    acceptExternal,
+    keepMine,
+    expandedPaths,
+    setExpanded,
+    restoreFolder,
   }
 }
 

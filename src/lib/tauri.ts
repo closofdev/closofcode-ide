@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen, type UnlistenFn } from "@tauri-apps/api/event"
-import { open } from "@tauri-apps/plugin-dialog"
+import { open, save } from "@tauri-apps/plugin-dialog"
 
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 
@@ -30,6 +30,7 @@ export const renamePath = (from: string, to: string) => invoke<void>("rename_pat
 export const deletePath = (path: string) => invoke<void>("delete_path", { path })
 
 export const pickFolder = () => open({ directory: true, multiple: false, title: "Open Folder" })
+export const pickSavePath = (defaultPath?: string) => save({ title: "Save As", defaultPath })
 
 export const watchRoot = (path: string) => invoke<void>("watch_root", { path })
 export const onFsChange = (cb: (change: FsChange) => void): Promise<UnlistenFn> =>

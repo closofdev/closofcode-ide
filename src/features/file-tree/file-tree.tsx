@@ -68,6 +68,12 @@ function Row(props: { path: string; depth: number }) {
     if (window.confirm(`Delete ${node().name}?`)) await ws.remove(props.path)
   }
 
+  const promptRename = async () => {
+    setMenu(false)
+    const name = window.prompt("Rename to", node().name)
+    if (name && name !== node().name) await ws.rename(props.path, name)
+  }
+
   return (
     <>
       <div
@@ -91,6 +97,14 @@ function Row(props: { path: string; depth: number }) {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault()
             activate()
+          }
+          if (e.key === "F2") {
+            e.preventDefault()
+            void promptRename()
+          }
+          if (e.key === "Delete") {
+            e.preventDefault()
+            void confirmDelete()
           }
         }}
       >
@@ -121,6 +135,7 @@ function Row(props: { path: string; depth: number }) {
           <div class="absolute z-50 top-full left-4 mt-0.5 min-w-[160px] bg-background-strong border border-border-base rounded-md shadow-lg py-1 text-sm">
             <MenuItem label="New File" onClick={promptNewFile} />
             <MenuItem label="New Folder" onClick={promptNewFolder} />
+            <MenuItem label="Rename" onClick={promptRename} />
             <div class="h-px bg-border-base my-1" />
             <MenuItem label="Delete" danger onClick={confirmDelete} />
           </div>

@@ -1,4 +1,4 @@
-import { createSignal, Show, type JSX } from "solid-js"
+import { Show, type Accessor, type JSX } from "solid-js"
 import { ResizeHandle } from "~ui/components/resize-handle"
 
 export interface ShellProps {
@@ -8,6 +8,12 @@ export interface ShellProps {
   editorTabs?: JSX.Element
   bottom?: JSX.Element
   statusBar?: JSX.Element
+  sidebarWidth: Accessor<number>
+  setSidebarWidth: (w: number) => void
+  sidebarOpen: Accessor<boolean>
+  setSidebarOpen: (v: boolean) => void
+  bottomHeight: Accessor<number>
+  setBottomHeight: (h: number) => void
   onToggleTerminal?: () => void
   onToggleSidebar?: () => void
 }
@@ -16,9 +22,6 @@ const SIDEBAR_MIN = 180
 const SIDEBAR_MAX = 560
 
 export function Shell(props: ShellProps) {
-  const [sidebarWidth, setSidebarWidth] = createSignal(260)
-  const [sidebarOpen, setSidebarOpen] = createSignal(true)
-
   return (
     <div class="h-dvh w-screen flex flex-col bg-background-base text-text-base overflow-hidden">
       {/* title bar */}
@@ -28,10 +31,10 @@ export function Shell(props: ShellProps) {
 
       <div class="flex-1 flex min-h-0">
         {/* sidebar */}
-        <Show when={sidebarOpen()}>
+        <Show when={props.sidebarOpen()}>
           <aside
             class="shrink-0 flex flex-col min-h-0 bg-background-strong border-r border-border-base"
-            style={{ width: `${sidebarWidth()}px` }}
+            style={{ width: `${props.sidebarWidth()}px` }}
           >
             <div class="h-9 shrink-0 flex items-center px-3 border-b border-border-base">{props.sidebarHeader}</div>
             <div class="flex-1 min-h-0 overflow-auto">{props.sidebar}</div>
@@ -39,12 +42,12 @@ export function Shell(props: ShellProps) {
           <ResizeHandle
             direction="horizontal"
             edge="start"
-            size={sidebarWidth()}
+            size={props.sidebarWidth()}
             min={SIDEBAR_MIN}
             max={SIDEBAR_MAX}
             collapseThreshold={140}
-            onResize={setSidebarWidth}
-            onCollapse={() => setSidebarOpen(false)}
+            onResize={props.setSidebarWidth}
+            onCollapse={() => props.setSidebarOpen(false)}
           />
         </Show>
 
@@ -55,7 +58,10 @@ export function Shell(props: ShellProps) {
           </div>
           <div class="flex-1 min-h-0 min-w-0">{props.editor}</div>
           <Show when={props.bottom}>
-            <div class="shrink-0 h-[240px] border-t border-border-base bg-background-strong overflow-hidden">
+            <div
+              class="shrink-0 border-t border-border-base bg-background-strong overflow-hidden"
+              style={{ height: `${props.bottomHeight()}px` }}
+            >
               {props.bottom}
             </div>
           </Show>
@@ -68,11 +74,8 @@ export function Shell(props: ShellProps) {
           <button
             type="button"
             class="hover:text-text-base"
-            onClick={() => {
-              props.onToggleSidebar?.()
-              setSidebarOpen((v) => !v)
-            }}
-            title="Toggle sidebar"
+            onClick={() => props.setSidebarOpen(!props.sidebarOpen())}
+            title="Toggle sidebar (Ctrl+B)"
           >
             Sidebar
           </button>
@@ -80,7 +83,7 @@ export function Shell(props: ShellProps) {
             type="button"
             class="hover:text-text-base"
             onClick={() => props.onToggleTerminal?.()}
-            title="Toggle terminal"
+            title="Toggle terminal (Ctrl+`)"
           >
             Terminal
           </button>

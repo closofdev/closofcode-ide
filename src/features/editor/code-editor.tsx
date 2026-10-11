@@ -14,7 +14,9 @@ export interface EditorProps {
   theme?: "dark" | "light"
   onChange?: (value: string) => void
   onSave?: () => void
+  onSaveAs?: () => void
   onViewChange?: (view: EditorViewState) => void
+  onCursorChange?: (cursor: { line: number; column: number }) => void
   initialView?: EditorViewState
 }
 
@@ -88,7 +90,11 @@ export function CodeEditor(props: EditorProps) {
       props.onChange?.(editor!.getValue())
     })
 
-    editor.onDidChangeCursorPosition(() => saveView())
+    editor.onDidChangeCursorPosition(() => {
+      saveView()
+      const pos = editor!.getPosition()
+      if (pos) props.onCursorChange?.({ line: pos.lineNumber, column: pos.column })
+    })
     editor.onDidScrollChange((e) => {
       if (e.scrollTopChanged) saveView()
     })
@@ -100,6 +106,16 @@ export function CodeEditor(props: EditorProps) {
     // Ctrl+F: open Monaco's built-in find widget.
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
       editor!.getAction?.("actions.find")?.run()
+    })
+
+    // Ctrl+G: go to line.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyG, () => {
+      editor!.getAction?.("editor.action.gotoLine")?.run()
+    })
+
+    // Ctrl+Shift+S: save as.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyS, () => {
+      props.onSaveAs?.()
     })
   })
 
